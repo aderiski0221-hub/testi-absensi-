@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Absensi SMPN 2 Sukaratu</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        :root {
+            --blue: #2563EB;
+            --yellow: #FDE047;
+            --dark: #1E293B;
+            --light: #F8FAFC;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--blue);
+            color: var(--dark);
+            margin: 0;
+            padding: 15px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background-color: white;
+            border-radius: 24px;
+            padding: 25px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            text-align: center;
+            border: 4px solid var(--yellow);
+            box-sizing: border-box;
+        }
+        .badge {
+            background-color: var(--yellow);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            display: inline-block;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        h1 {
+            color: var(--blue);
+            font-size: 24px;
+            margin: 0 0 5px 0;
+            font-weight: 800;
+        }
+        p.subtitle {
+            color: #64748B;
+            font-size: 14px;
+            margin: 0 0 20px 0;
+        }
+        select {
+            width: 100%;
+            padding: 14px;
+            border-radius: 14px;
+            border: 2px solid #E2E8F0;
+            font-size: 16px;
+            margin-bottom: 15px;
+            outline: none;
+            font-weight: bold;
+            color: var(--blue);
+            background-color: var(--light);
+        }
+        #reader {
+            width: 100%;
+            border-radius: 16px;
+            overflow: hidden;
+            margin-bottom: 15px;
+            border: 2px dashed var(--blue) !important;
+        }
+        .btn-download {
+            width: 100%;
+            background-color: var(--yellow);
+            color: var(--dark);
+            border: 2px solid var(--dark);
+            padding: 12px;
+            border-radius: 14px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 4px 4px 0px var(--dark);
+            transition: all 0.2s;
+            margin-top: 10px;
+        }
+        .btn-download:active {
+            transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0px var(--dark);
+        }
+        .status {
+            padding: 12px;
+            border-radius: 12px;
+            font-weight: bold;
+            display: none;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        .success {
+            background-color: #D1FAE5;
+            color: #065F46;
+            border: 2px solid #065F46;
+        }
+        .total-info {
+            font-size: 12px;
+            color: #64748B;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="badge">✨ SMPN 2 SUKARATU</div>
+    <h1>ABSENSI DIGITAL</h1>
+    <p class="subtitle">Pilih kelas, lalu scan QR Code kamu!</p>
+
+    <select id="kelas">
+        <option value="" disabled selected>-- PILIH KELAS --</option>
+        <optgroup label="KELAS 7">
+            <option value="7A">7A</option> <option value="7B">7B</option> <option value="7C">7C</option>
+            <option value="7D">7D</option> <option value="7E">7E</option> <option value="7F">7F</option>
+        </optgroup>
+        <optgroup label="KELAS 8">
+            <option value="8A">8A</option> <option value="8B">8B</option> <option value="8C">8C</option>
+            <option value="8D">8D</option> <option value="8E">8E</option> <option value="8F">8F</option>
+        </optgroup>
+        <optgroup label="KELAS 9">
+            <option value="9A">9A</option> <option value="9B">9B</option> <option value="9C">9C</option>
+            <option value="9D">9D</option> <option value="9E">9E</option> <option value="9F">9F</option>
+        </optgroup>
+    </select>
+
+    <div id="reader"></div>
+
+    <div id="statusMsg" class="status success">
+        ✅ <span id="namaSiswa"></span> (<span id="kelasSiswa"></span>) Berhasil Dicatat!
+    </div>
+
+    <button class="btn-download" onclick="downloadExcel()">📥 DOWNLOAD DATA EXCEL</button>
+    <button class="btn-download" style="background-color: #EF4444; color: white;" onclick="hapusData()">🗑️ REFRESH / HAPUS DATA</button>
+    
+    <div class="total-info">
+        Total data tersimpan di HP: <span id="totalData">0</span> siswa
+    </div>
+</div>
+
+<script>
+    let isProcessing = false;
+
+    // Fungsi Update Jumlah Data Tersempan
+    function updateCounter() {
+        let dataLokal = JSON.parse(localStorage.getItem('dataAbsensi') || '[]');
+        document.getElementById('totalData').innerText = dataLokal.length;
+    }
+
+    // Fungsi Saat QR Sukses Terscan
+    function onScanSuccess(decodedText, decodedResult) {
+        if (isProcessing) return;
+
+        const kelasSelector = document.getElementById('kelas');
+        const kelasDipilih = kelasSelector.value;
+
+        if (!kelasDipilih) {
+            alert('Waduh! Pilih kelas dulu dong sebelum scan.');
+            return;
+        }
+
+        isProcessing = true;
+
+        // Ambil data lama di lokal, tambahkan data baru
+        let dataLokal = JSON.parse(localStorage.getItem('dataAbsensi') || '[]');
+        
+        let waktuSekarang = new Date().toLocaleString('id-ID');
+        let dataBaru = {
+            waktu: waktuSekarang,
+            nama: decodedText,
+            kelas: kelasDipilih
+        };
+
+        dataLokal.push(dataBaru);
+        localStorage.setItem('dataAbsensi', JSON.stringify(dataLokal));
+
+        // Tampilkan Notifikasi Sukses
+        document.getElementById('namaSiswa').innerText = decodedText;
+        document.getElementById('kelasSiswa').innerText = kelasDipilih;
+        document.getElementById('statusMsg').style.display = 'block';
+
+        updateCounter();
+
+        // Reset Scanner setelah 2 detik agar bisa scan siswa lain
+        setTimeout(() => {
+            document.getElementById('statusMsg').style.display = 'none';
+            isProcessing = false;
+        }, 2000);
+    }
+
+    // Fungsi Download Jadi File Excel (CSV)
+    function downloadExcel() {
+        let dataLokal = JSON.parse(localStorage.getItem('dataAbsensi') || '[]');
+        
+        if (dataLokal.length === 0) {
+            alert('Belum ada data absensi yang tersimpan!');
+            return;
+        }
+
+        // Susun format CSV/Excel
+        let csvContent = "\uFEFFWaktu Absen,Nama Siswa,Kelas\n"; // \uFEFF biar gak error font di excel
+        dataLokal.forEach(function(row) {
+            csvContent += `"${row.waktu}","${row.nama}","${row.kelas}"\n`;
+        });
+
+        // Proses Download di Android / Browser
+        let blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        let url = URL.createObjectURL(blob);
+        let link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", "Absensi_SMPN2_Sukaratu.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // Fungsi Hapus Data (Buat Reset Hari Berikutnya)
+    function hapusData() {
+        if (confirm('Apakah kamu yakin ingin menghapus semua data absensi di HP ini? Pastikan sudah di-download ya!')) {
+            localStorage.removeItem('dataAbsensi');
+            updateCounter();
+            alert('Data berhasil dikosongkan!');
+        }
+    }
+
+    // Jalankan Kamera bawaan Android
+    const html5QrcodeScanner = new Html5QrcodeScanner(
+        "reader", { fps: 15, qrbox: {width: 250, height: 250} }, false);
+    html5QrcodeScanner.render(onScanSuccess);
+
+    // Jalankan counter saat web dibuka
+    updateCounter();
+</script>
+
+</body>
+</html>
